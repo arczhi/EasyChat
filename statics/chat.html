@@ -1,0 +1,453 @@
+<style>
+    .text {
+      font-size: 14px;
+    }
+  
+    .item {
+      padding: 0 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .msg-area{
+        width: 85%;
+        height: 90%;
+        display: flex; 
+        flex-direction: column;
+        overflow: auto;
+    }
+  
+    .msg-card {
+      width: fit-content;
+      height: 35px;
+      margin: 6px 0;
+      /* margin-right: 20px; */
+      border: black 1px;
+      padding: 0 20px;
+      border-radius: 5px;
+      
+    }
+
+    .msg-right-side{
+        display: flex;
+        justify-content: right;
+        flex-direction: column;
+    }
+
+    .msg-left-side{
+        display: flex;
+        justify-content: left;
+        flex-direction: column;
+    }
+
+    .msg-time-right{
+        font-size:6px; 
+        text-align: right;
+        color: grey;
+    }
+
+    .msg-time-left{
+        font-size:6px; 
+        text-align: left;
+        color: grey;
+    }
+
+    .latest-time{
+        font-size: 6px;
+        color: grey;
+        /* display: center;
+        justify-content: center; */
+        text-align: center;
+        margin-top: 20px;
+    }
+
+  </style>
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Easy Chat</title>
+    <!-- 引入element-ui样式 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+
+  </head>
+  <body>
+    <div @click="backToNewRoom">
+        <h2 style="display: flex;justify-content: center;">Hello World</h2>
+    </div>
+
+    <div id="easy_chat" style="display: flex; justify-content: center; width:100%; height: 85%;">
+
+        <div class="msg-area" ref="chatContent">
+            <div v-if="ReceiveMsgList.length != 0" 
+            v-for="(item,index) in ReceiveMsgList" :key="item.id" >
+                <div v-if="item.sender_id == own_id" class="msg-right-side">
+                        <div style="display: flex;justify-content: right;">
+                            <div class="text item msg-card" style="background-color: rgb(235, 248, 248);">
+                            {{item.content}}
+                            </div>
+                        </div>
+                        <div class="msg-time-right">{{formatTime(item.created_at)}}  {{Cookies.get("username")}}</div>
+                </div>
+                <div v-if="item.sender_id != own_id" class="msg-left-side">
+                        <div style="display: flex;justify-content: left;">
+                            <div class="text item msg-card" style="background-color: rgb(238, 238, 238);" >
+                            {{item.content}}
+                            </div>
+                        </div>
+                        <!-- <div :v-if="GetUsername(item.sender_id) != '' " class="msg-time-left">{{formatTime(item.created_at)}}  {{GetUsername(item.sender_id)}}</div> -->
+                        <div v-if="username_cache[item.sender_id] != undefined " class="msg-time-left">{{formatTime(item.created_at)}}  {{username_cache[item.sender_id]}}</div>
+                        <div v-if="username_cache[item.sender_id] == undefined ">
+                            <div v-if="func_call_num < (room_member_num*2) "> 
+                                <div v-if="GetUsername(item.sender_id)"></div>
+                            </div>     
+                        </div>
+                        <!-- <div v-if="username_cache[item.sender_id] == undefined " class="msg-time-left">{{formatTime(item.created_at)}}  unknown</div> -->
+                </div>
+
+                <div v-if="isTimestampReload">
+                    <div v-if="timeGap > 60" class="latest-time">
+                        <div v-if="index===(ReceiveMsgList.length-1)">
+                            latest message {{timestamp}}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; width: 85%; position: fixed; bottom: 20px;">
+            <el-input v-model="msgContent" @keyup.enter.native="sendMessage"></el-input>
+            <el-button style="margin-left: 20px;" @click="sendMessage" type="primary" plain>send</el-button>
+        </div>
+
+    </div>
+  </body>
+
+</html>
+
+    <!--引入vue-->
+    <script src="https://cdn.staticfile.org/vue/2.2.2/vue.min.js"></script>
+    <!-- 引入element-ui组件库 -->
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <!--引入jquery-->
+    <script src="https://cdn.staticfile.org/jquery/1.10.2/jquery.min.js"></script>
+    <!--axios-->
+    <script type="text/javascript" src="https://cdn.bootcss.com/axios/0.18.0/axios.min.js"></script>
+    <!--js-cookie-->
+    <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"></script>
+
+    <script>
+
+        var vm = new Vue({
+            el:"#easy_chat",
+            data:{
+                ws:"",
+                msgContent:"",
+                ReceiveMsgList:[],
+                timeGap:0,
+                timestamp:"",
+                isTimestampReload:true,
+                own_id:parseInt(Cookies.get("id")),
+                oppo_username:"",//对方的用户名
+                username_cache:{},
+                room_member_num: 0,
+                func_call_num:0,
+            },
+            methods:{
+                sendMessage () {
+                    if (this.msgContent == "") {
+                        this.$message("请输入一条信息")
+                        return
+                    }
+                    var sender_id = Cookies.get("id")
+                    var entry_room_key = Cookies.get("entry_room_key")
+                    if ((sender_id == undefined) || (entry_room_key == undefined)) {
+                        this.$message.error("cookie not existed")
+                        return
+                    }
+                    //"yyyy-MM-dd"+"T"+"HH:mm:ss"+"Z"
+                    data = {"sender_id":parseInt(sender_id),"room_key":entry_room_key,"content":this.msgContent,"created_at":(new Date()).Format("yyyy-MM-dd"+"T"+"HH:mm:ss")+"+08:00"}
+                    console.log("[send] " + data)
+                    this.ws.send(JSON.stringify(data))
+                    //及时清空输入框的消息
+                    this.msgContent = ""
+                },
+                //关闭websocket
+                closeWebsocket(e){
+                    if(this.ws){
+                        this.ws.close();
+                        let _this=this
+                        this.ws.onclose = function(evt) {
+                            console.log("websocket已关闭");
+                        };
+                    }
+                },
+                //滚动条自动到底部
+                scrollToBottom() {
+                    this.$nextTick(() =>{
+                        this.$refs.chatContent.scrollTop = this.$refs.chatContent.scrollHeight;
+                    })
+                },
+                //计算最后一条消息的时间与当前时间的差值
+                getTimeGap(){
+                    if (this.ReceiveMsgList.length == 0){
+                        return
+                    }
+                    str1 = this.ReceiveMsgList[this.ReceiveMsgList.length-1].created_at.slice(0,10)
+                    str2 = this.ReceiveMsgList[this.ReceiveMsgList.length-1].created_at.slice(11,19)
+                    str = str1+" "+str2
+                    this.timestamp = str
+                    var latestMsg_timeTamp = new Date((str).replace(/-/g,'/')).getTime()
+                    this.timeGap = (Date.now() - latestMsg_timeTamp)/1000
+                    // console.log(this.timeGap)
+                },
+                //格式化时间
+                formatTime(time){
+                    // return time.slice(0,10)+" "+time.slice(11,19)
+                    return time.slice(11,19)
+
+                },
+                //刷新时间戳
+                reloadTimestamp(){
+                    this.isTimestampReload = false
+                    this.$nextTick(()=>{
+                        this.isTimestampReload = true
+                    })
+                },
+                //获取其他人的用户名
+                GetUsername(user_id){
+
+                    //记录调用次数
+                    this.func_call_num = this.func_call_num + 1 
+
+                    var username = ''
+
+                    //测试
+                    // console.log(this.username_cache)
+
+                    //缓存存在，则使用缓存字典的数据
+                    if (this.username_cache[user_id]!= undefined){
+                        return
+                    }
+
+                    //没有缓存，直接请求后台服务
+                    axios({
+                    method: 'post',
+                    url: 'https://touchcloud.top:8282/GetUsername',
+                    //从cookie里面提取id，要记得将string转成int
+                    data: parseInt(user_id),
+                    })
+                    .then(res=>{
+                        if (res.status == 200){
+                            if (res.data != ""){
+                                this.username = res.data
+                                //将id和对应的username存入字典
+                                this.username_cache[user_id] = res.data
+                            }
+                        }
+                    })
+                    .catch(err=>{
+                        console.log(err)
+                        //this.$message.error("获取对方信息失败，请刷新本页面重试！")
+                    })
+
+                    // return false
+
+                },
+                //返回创建聊天室的页面
+                backToNewRoom(){
+                    window.location.href="./newRoom.html"
+                },
+                //路由守卫
+                routerGuard(){
+                    if ((Cookies.get("id") == undefined) || (Cookies.get("username") == undefined)){
+                        window.location.href="./index.html"
+                    }
+                },
+                //获取当前聊天室的成员数量
+                GetRoomMemberNum(){
+                            axios({
+                            method: 'post',
+                            url: 'https://touchcloud.top:8282/RoomMemberNum',
+                            data: Cookies.get("entry_room_key"),
+                            })
+                            .then(res=>{
+                                if (res.status == 200){
+                                    // console.log(res.data)
+                                    if (res.data != undefined){
+                                        Cookies.set("room_member_num",res.data)
+                                        this.room_member_num = res.data
+                                        console.log("room_member_num",this.room_member_num)
+                                    }
+                                }
+                            })
+                            .catch(err=>{
+                                console.log(err)
+                                //this.$message.error("获取对方信息失败，请刷新本页面重试！")
+                            })
+                    },
+            },
+            mounted(){
+
+                //路由守卫
+                this.routerGuard()
+
+                //查询当前聊天室的成员数量
+                this.GetRoomMemberNum()
+
+                //绑定聊天室的人数
+                // this.room_member_num = Cookies.get("room_member_num")
+                // console.log("room_member_num ",this.room_member_num)
+
+                //测试
+                console.log({"entry_room_key":Cookies.get("entry_room_key"),"own_id":Cookies.get("id")})
+
+                // //每次加载，需要先获取对方用户名
+                // axios({
+                //     method: 'post',
+                //     url: 'https://touchcloud.top:8282/OppoUsername',
+                //     //从cookie里面提取id，要记得将string转成int
+                //     data: {"entry_room_key":Cookies.get("entry_room_key"),"own_id":parseInt(Cookies.get("id"))},
+                // })
+                // .then(res=>{
+                //     if (res.status == 200){
+                //         if (res.data != ""){
+                //             this.oppo_username = res.data
+                //         }
+                //     }
+                // })
+                // .catch(err=>{
+                //     console.log(err)
+                //     this.$message.error("获取对方信息失败，请刷新本页面重试！")
+                // })
+
+                //websocket通信
+                var wsURL = "wss://touchcloud.top:8289/Msg" // "ws://touchcloud.top:8283/Msg"
+                this.ws = new WebSocket(wsURL);
+                let socket = this.ws
+                console.log("Attempting ws Connection...");
+                
+                var _this = this
+
+                socket.onopen = () => {
+                    console.log("ws Successfully Connected");
+                    //socket.send("Hi From the Client!")
+                    
+                    if ((Cookies.get("id") == undefined) || (Cookies.get("entry_room_key") == undefined)) {
+                        alert("cookie 缺失，websocket初始连接失败")
+                        return
+                    }
+
+                    //初始化连接，获取所有消息
+                    // 1111111 + entry_room_key（10位） + 用户id (5位) 字符串拼接
+                    socket.send("i"+11111111+Cookies.get("entry_room_key")+(Cookies.get("id")))
+                    
+                    setTimeout(()=>{
+
+                        //顺利获取所有消息后，定期将向服务端发送接收到的最后一条消息的id (last_id)
+                        self.setInterval(
+                            function sendLastId(){
+                            //console.log(_this.ReceiveMsgList)
+                            var last_id = 11111111
+                            if ( _this.ReceiveMsgList.length != 0 ){
+                                last_id = _this.ReceiveMsgList[_this.ReceiveMsgList.length-1].id
+                                // socket.send(last_id)
+                            }
+                            socket.send(last_id)
+                        },200 ) //ms
+
+                        setTimeout(()=>{
+                            //顺利获取所有消息后，监听最新一条消息的时间
+                            self.setInterval(
+                                ()=>{
+                                    this.getTimeGap()
+                                },
+                            200 ) //ms
+                            //更新时间戳
+                            self.setInterval(
+                                ()=>{
+                                    this.reloadTimestamp()
+                                },
+                            30000)
+                        },400) //ms
+
+                    },1000) //ms 一段时间后才开始相关轮询操作，等待客户端接收到第一次消息数据
+
+                    //滚动条自动到底部
+                    this.scrollToBottom()
+                };
+
+                socket.onmessage = (res) => {
+                    //先将响应数据转换为js对象
+                    jsonData = JSON.parse(res.data)
+                    // console.log(jsonData)
+                    if ((jsonData == undefined)||(jsonData == "")){
+                        return
+                    }
+                    //依次添加到data域的列表中
+                    for (var i=0; i<jsonData.length; i++) {
+                        this.ReceiveMsgList.push(jsonData[i])
+                    }
+                    //调整滚动条
+                    this.scrollToBottom()
+                     
+                    // console.log(this.ReceiveMsgList)
+                };
+                
+                socket.onclose = event => {
+                    console.log("Socket Closed Connection: ", event);
+                    socket.send("Client Closed!")
+                    this.$message("连接已重置，正在刷新本页面...")
+                    window.location.href="./chat.html"
+                };
+
+                socket.onerror = error => {
+                    console.log("Socket Error: ", error);
+                };
+            },
+            created(){
+                //绑定事件
+                window.addEventListener('beforeunload', e => this.closeWebsocket(e))
+            },
+            beforeDestroy() { 
+                //卸载事件
+                window.removeEventListener('beforeunload', e => this.closeWebsocket(e))
+            },
+            computed:{
+                //计算属性
+
+                //计算消息卡片的长度
+                calculateCardLength() {
+                    // this.cardLength =
+                }
+            },
+            updated(){
+                // this.scrollToBottom()
+            },
+
+        })
+
+        //时间戳
+        Date.prototype.Format = function (fmt) {
+            var o = {
+                "M+": this.getMonth() + 1, //月份 
+                "d+": this.getDate(), //日 
+                "H+": this.getHours(), //小时 
+                "m+": this.getMinutes(), //分 
+                "s+": this.getSeconds(), //秒 
+                "q+": Math.floor((this.getMonth() + 3) / 3), //季度 
+                "S": this.getMilliseconds() //毫秒 
+            };
+            if (/(y+)/.test(fmt)) fmt = fmt.replace(RegExp.$1, (this.getFullYear() + "").substr(4 - RegExp.$1.length));
+            for (var k in o)
+            if (new RegExp("(" + k + ")").test(fmt)) fmt = fmt.replace(RegExp.$1, (RegExp.$1.length == 1) ? (o[k]) : (("00" + o[k]).substr(("" + o[k]).length)));
+            return fmt;
+        }
+
+
+    </script>
+

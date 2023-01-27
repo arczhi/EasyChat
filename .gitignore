@@ -1,0 +1,8 @@
+# 忽略配置文件
+config/.cfg.json
+
+# 忽略sessions文件夹
+sessions
+
+# 忽略生成程序
+beta

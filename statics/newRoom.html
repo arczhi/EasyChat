@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta https-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Easy Chat [newRoom]</title>
+</head>
+
+    <!-- 引入element-ui样式 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+
+<body>
+    <div id="chat_room" style="width: 100%;height: 100%; display: flex; justify-content: center;">
+    <div style="display: flex; justify-content: center;flex-direction: column;text-align: center; width:85%;">
+        <h2>聊天室创建与加入</h2>
+        <div v-if="own_room_key.length == 0" style="display: flex;justify-content: center;width:100%; height: 100%; margin-top: 80px;">
+            <el-card style="display: flex;justify-content:center; width:80%; height:80px; align-items: center;font-size: 10px;">
+                请点击"获取"，获取你的聊天室Key
+            </el-card>
+        </div>
+        <div v-if="own_room_key.length != 0" style="display: flex;justify-content: center;width:100%; height: 100%; margin-top: 80px;">
+            <div v-clipboard:copy="own_room_key" 
+            v-clipboard:success="firstCopySuccess"
+            v-clipboard:error="firstCopyError"
+            style="display: flex;justify-content: center;width:100%;">
+                <el-card style="font-size: 20px;font-weight: 500; display: flex;justify-content:center; width:80%; height:80px; align-items: center;">
+                    <div id="ORK" style="font-size: 12px; margin-bottom: 10px;">你的聊天室Key（点击复制）</div> 
+                    {{own_room_key}}
+                </el-card>
+            </div>
+        </div>
+        <div style="display: flex;justify-content: center;">
+            <div style="width: 80%;">
+            <el-button type="primary" plain :disabled="getkey_disabled" style="width:80%; margin-top: 20px;"
+            @click="createNewRoom">
+                获取</el-button>
+            </div>
+        </div>
+
+        <div style="display: flex;justify-content: center;width:100%; height: 100%; margin-top: 50px;">
+            <div style="width: 80%;">
+                <el-input placeholder="请输入要加入的聊天室的Key"
+                v-model="entry_room_key" >
+                <!-- maxlength="10" -->
+                <!-- @keyup.native="checkEntryRoomKey" -->
+                <!-- @blur="entry_room_key = $event.target.value" -->
+                </el-input>
+            </div>
+        </div>
+        <div style="display: flex;justify-content: center;">
+            <div style="width: 80%;">
+            <el-button type="primary" plain :disabled="entry_disabled" style="width:80%; margin-top: 20px;"
+            @click="EntryRoom">
+                加入聊天室</el-button>
+            </div>
+        </div>
+
+
+    </div>
+    </div>
+
+</body>
+
+    <!--引入vue-->
+    <script src="https://cdn.staticfile.org/vue/2.2.2/vue.min.js"></script>
+    <!-- 引入element-ui组件库 -->
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <!--axios-->
+    <script type="text/javascript" src="https://cdn.bootcss.com/axios/0.18.0/axios.min.js"></script>
+    <!--js-cookie-->
+    <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/vue-clipboard2/0.3.3/vue-clipboard.js"></script>
+
+    <script>
+            //跨域存储cookie、session
+            axios.defaults.withCredentials = true
+
+            var vm = new Vue({
+                el:"#chat_room",
+                data:{
+                    own_room_key:"", //自己的聊天室Key
+                    entry_room_key:"", //要加入的聊天室的Key
+                    getkey_disabled:false,
+                    entry_disabled:false,
+                },
+                methods:{
+                    createNewRoom(){
+                        //先关闭请求按钮
+                        this.getkey_disabled = true
+
+                        //发起请求
+                        axios({
+                            method: 'post',
+                            url: 'https://touchcloud.top:8282/ChatRoom/New',
+                            })
+                            .then(res=>{
+                                if (res.status == 200){
+                                //聊天室创建成功
+                                //绑定变量
+                                console.log(res.data)
+                                this.own_room_key = res.data.room_key
+                                //使用cookie存储聊天室的Key
+                                Cookies.set('own_room_key', res.data.room_key, { expires: 7, path: '' }); //7天过期
+                                }
+                                //请求完毕，开启按钮
+                                this.getkey_disabled = false
+                            })
+                            .catch(err=>{
+                                alert("Error: " + err.message)
+                                //请求完毕，开启按钮
+                                this.getkey_disabled = false
+                            })
+                    },
+                    EntryRoom(){
+                        //发起请求
+                        axios({
+                            method: 'post',
+                            url: 'https://touchcloud.top:8282/ChatRoom/Entry',
+                            data: this.entry_room_key,
+                            })
+                            .then(res=>{
+                                if (res.data == "ok"){
+                                //聊天室添加成员成功
+                                //使用cookie存储聊天室的Key
+                                Cookies.set('entry_room_key', this.entry_room_key, { expires: 7, path: '' }); //7天过期
+                                //跳转到聊天对话框
+                                window.location.href="./chat.html"
+                                }
+                            })
+                            .catch(err=>{
+                                console.log(err)
+                                //跳转回登录页面
+                                window.location.href="./index.html"
+                            })
+                    },
+                    checkEntryRoomKey(){
+                        // console.log(this.entry_room_key.length)
+                        if (this.entry_room_key.length != 10){
+                            this.entry_disabled = true
+                        }else{
+                            this.entry_disabled = false
+                        }
+                    },
+                    //复制到own_room_key剪贴板
+                    firstCopySuccess(e) {
+                        console.log("copy arguments e:", e);
+                        this.$message.success("复制成功!");
+                    },
+                    firstCopyError(e) {
+                        console.log("copy arguments e:", e);
+                        this.$message.error("复制失败!");
+                    },
+                    //路由守卫
+                    routerGuard(){
+                        if ((Cookies.get("id") == undefined) || (Cookies.get("username") == undefined)){
+                            window.location.href="./index.html"
+                        }
+                    }
+                },
+                mounted(){
+
+                    this.routerGuard()
+
+                    //加载cookie里的own_room_key
+                    if (Cookies.get('own_room_key') != ""){
+                        this.own_room_key = Cookies.get('own_room_key')
+                    }
+                },
+            })
+    </script>
+
+</html>

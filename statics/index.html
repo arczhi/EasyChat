@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Easy Chat [login]</title>
+            <!-- 引入element-ui样式 -->
+            <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+</head>
+
+<style>
+    .input-box{
+        width: 100%;
+        margin: 10px 0;
+        display: flex;
+        justify-content: center;
+        flex-direction: column;
+    }
+</style>
+
+<body>
+    <div id="login" style="width: 100%;height: 100%; display: flex; justify-content: center;">
+        <div style="display: flex; justify-content: center;flex-direction: column;text-align: center; width:85%;" >
+        <h2>登录</h2>
+        <div class="input-box">
+            <div style="font-size: 10px;text-align: left;">用户名</div>
+            <el-input placeholder="请输入用户名" v-model="username" clearable 
+            @keyup.native="checkUsername"></el-input>
+        </div>
+        <div class="input-box">
+            <div style="font-size: 10px;text-align: left;">密码</div>
+            <el-input placeholder="请输入密码" v-model="password" show-password clearable 
+            @keyup.native="checkPassword"></el-input>
+        </div>
+
+        <div style="display: flex;justify-content: center;">
+            <div style="width: 80%;">
+            <el-button type="primary" plain :disabled="buttonDisabled" style="width:80%; margin-top: 20px;"
+            @click="login">
+                登录</el-button>
+            </div>
+        </div>
+
+        <a href="/register.html" style="margin-top: 50px;">账号注册</a>
+
+        </div>
+    </div>
+</body>
+
+    <!--引入vue-->
+    <script src="https://cdn.staticfile.org/vue/2.2.2/vue.min.js"></script>
+    <!-- 引入element-ui组件库 -->
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <!--axios-->
+    <script type="text/javascript" src="https://cdn.bootcss.com/axios/0.18.0/axios.min.js"></script>
+    <!--js-cookie-->
+    <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"></script>
+
+<script>
+            //跨域存储cookie、session
+            axios.defaults.withCredentials = true
+
+            var vm = new Vue({
+                el:"#login",
+                data:{
+                    username:'',
+                    password:'',
+                    buttonDisabled:false,
+                    pass_right:false,
+                },
+                methods:{
+                    login(){
+
+                        //若session存在，则直接通过
+                        if (Cookies.get('user') != undefined){
+                            console.log("no server connection")
+                            window.location.href="./newRoom.html"
+                        }
+
+                        //请求服务器
+                        axios({
+                        method: 'post',
+                        url: 'https://touchcloud.top:8282/Login',
+                        data: {username:this.username,password:this.password},
+                        // headers:{ withCredentials: true},
+                        })
+                        .then(res=>{
+                            if (res.status == 200){
+                            //登录成功
+                            this.$message.success("登录成功！")
+                            
+                            // console.log(Cookies.get("user"))
+                            // return
+
+                            //使用cookie存储用户名和id
+                            Cookies.set('username', res.data.username, { expires: 7, path: '' }); //7天过期
+                            Cookies.set('id', res.data.id, { expires: 7, path: '' });
+                            //跳转到创建聊天室的页面
+                            // window.location.href="./newRoom.html"
+                            }
+                        })
+                        .catch(err=>{
+                            console.log(err.response)
+                            if ((err.response.status == 500) || ((err.response.status == 403))){
+                                this.$message.warning("账号或密码错误！")
+                            }else{
+                                this.$message.error("服务出错！")
+                            }
+                        })
+                    },
+                    checkUsername(){
+                        //检查输入
+                        if (this.username=="") {
+                            this.buttonDisabled = true
+                            return
+                        }
+                        //控制用户名长度
+                        if ((this.username.length < 3) || (this.username.length > 8))  {
+                            this.buttonDisabled = true
+                            return
+                        }
+
+                        this.buttonDisabled = false
+                    },
+                    checkPassword(){
+                    //控制密码长度
+                    if ((this.password.length < 3) || (this.password.length > 18)){
+                        this.buttonDisabled = true
+                        this.pass_right = true
+                    }else{
+                        this.pass_right = false
+                        this.buttonDisabled = false
+                    }
+                },
+                },
+                mounted(){
+                    //若session存在，则直接通过
+                    if ((Cookies.get('id') != undefined) && (Cookies.get('username') != undefined)){
+                            console.log("no server connection")
+                            window.location.href="./newRoom.html"
+                    }
+                },
+            })
+</script>
+
+</html>

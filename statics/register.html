@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Easy Chat [Register]</title>
+        <!-- 引入element-ui样式 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+</head>
+
+<style>
+    .input-box{
+        width: 100%;
+        margin: 10px 0;
+        display: flex;
+        justify-content: center;
+        flex-direction: column;
+    }
+</style>
+
+<body>
+
+    <div id="register" style="width: 100%;height: 100%; display: flex; justify-content: center;">
+        <div style="display: flex; justify-content: center;flex-direction: column;text-align: center; width:85%;">
+            <h2>注册</h2>
+            <div v-if="username_exist_check" style="font-size: 6px; color: orange;">用户名已存在</div>
+            <div class="input-box">
+                <div style="font-size: 10px;text-align: left;">请输入用户名</div>
+            <el-input placeholder="请输入用户名" v-model="username" clearable 
+            @keyup.native="checkUsername"></el-input>
+            </div>
+            <div v-if="pass_right" style="font-size: 6px; color: orange;">密码长度不合适</div>
+            <div class="input-box">
+                <div style="font-size: 10px;text-align: left;">请输入密码</div>
+            <el-input placeholder="请输入密码" v-model="password" show-password clearable 
+            @keyup.native="checkPassword"></el-input>
+            </div>
+            <div v-if="pass_mismatch" style="font-size: 6px; color: orange;">密码输入不一致</div>
+            <div class="input-box">
+                <div style="font-size: 10px;text-align: left;">请再次确认密码</div>
+            <el-input placeholder="请再次确认密码" v-model="confirm_password" show-password clearable 
+            @keyup.native="checkConfirmPassword"></el-input>
+            </div>
+
+            <div style="display: flex;justify-content: center;">
+                <div style="width:80%;">
+                <el-button type="primary" plain :disabled="buttonDisabled" style="width:80%; margin-top: 20px;"
+                @click="submit">
+                    注册</el-button>
+                </div>
+            </div>
+
+            <a href="/login.html" style="margin-top: 50px;">返回登录</a>
+
+        </div>
+    </div>
+    
+</body>
+
+    <!--引入vue-->
+    <script src="https://cdn.staticfile.org/vue/2.2.2/vue.min.js"></script>
+    <!-- 引入element-ui组件库 -->
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <!--axios-->
+    <script type="text/javascript" src="https://cdn.bootcss.com/axios/0.18.0/axios.min.js"></script>
+    <!--js-cookie-->
+    <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"></script>
+    <!--vue-router-->
+    <!-- <script src="https://unpkg.com/vue-router@4.0.15/dist/vue-router.global.js"></script> -->
+
+    <script>
+        //跨域存储cookie、session
+        axios.defaults.withCredentials = true
+
+        var vm = new Vue({
+            el:"#register",
+            data:{
+                username:'',
+                password:'',
+                confirm_password:'',
+                buttonDisabled:false,
+                pass_right:false,
+                pass_mismatch:false,
+                username_exist_check:false,
+                // router: new VueRouter(),
+            },
+            methods:{
+                submit(){
+
+                    if (this.password != this.confirm_password){
+                        this.$message.warning("密码不一致！")
+                        return
+                    }
+
+                    axios({
+                        method: 'post',
+                        url: 'https://touchcloud.top:8282/Register',
+                        data: {username:this.username,password:this.password}
+                    })
+                    .then(res=>{
+                        console.log(res)
+                        if (res.status == 200){
+                            //注册成功
+                            this.$message.success("注册成功！")
+                            //使用cookie存储用户名和id
+                            Cookies.set('username', res.data.username, { expires: 7, path: '' }); //7天过期
+                            Cookies.set('id', res.data.id, { expires: 7, path: '' });
+                            //跳转到创建聊天室的页面
+                            window.location.href="./newRoom.html"
+                        }
+                    })
+                    .catch(error=>{
+                        console.log(error)
+                        alert("Error: " + error)
+                    })
+                },
+                checkUsername(){
+                     //检查输入
+                    if (this.username=="") {
+                        this.buttonDisabled = true
+                        return
+                    }
+                    // console.log(this.username.length)
+                    //控制用户名长度
+                    if ((this.username.length < 3) || (this.username.length > 8))  {
+                        this.buttonDisabled = true
+                        this.$message("用户名长度不合适")
+                        return
+                    }
+
+                    this.buttonDisabled = false
+
+                    axios({
+                        method: 'post',
+                        url: 'https://touchcloud.top:8282/CheckUsername',
+                        data: {username:this.username}
+                    })
+                    .then(res=>{
+                        if (res.data == "existed"){
+                            this.buttonDisabled = true
+                            this.username_exist_check = true
+                            // this.$message("用户名已被使用!")
+                        }else{
+                            this.buttonDisabled = false
+                            this.username_exist_check = false
+                        }
+                    })
+                },
+                checkPassword(){
+                    //控制密码长度
+                    if ((this.password.length < 3) || (this.password.length > 18)){
+                        this.buttonDisabled = true
+                        this.pass_right = true
+                    }else{
+                        this.pass_right = false
+                        this.buttonDisabled = false
+                    }
+                },
+                checkConfirmPassword(){
+                    //检查两次密码是否输入一致
+                    if (this.password != this.confirm_password){
+                        this.pass_mismatch = true
+                        this.buttonDisabled = true
+                    }else{
+                        this.pass_mismatch = false
+                        this.buttonDisabled = false
+                    }
+                },
+
+            },
+        });
+    </script>
+
+
+</html>
