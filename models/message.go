@@ -270,7 +270,8 @@ func (m *Msg) DataPersistenceRetry() {
 		err := m.SaveOne()
 		if err != nil {
 			log.Println(err)
-			continue
+		} else {
+			break
 		}
 		//等待
 		//k=Min[重试次数，10]
