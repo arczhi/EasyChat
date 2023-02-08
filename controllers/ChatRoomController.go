@@ -54,7 +54,7 @@ func EntryChatRoom(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		//secure cookie这个库在读取session的时候有问题（较频繁）
 		//2023/01/21 20:28:38 securecookie: the value is not valid
-		//是重启server,导致Store的 key发生了改变，默认使用了随机生成的key,现在需要固定这个key
+		//是重启server,导致Store的 key发生了改变，默认使用了随机生成的key，现在需要固定这个key
 		//https://github.com/gorilla/sessions/issues/16
 		log.Println(err)
 		w.WriteHeader(http.StatusForbidden)
