@@ -129,9 +129,14 @@
                                 }
                             })
                             .catch(err=>{
+                                if (err.response.status = 403){
+                                    this.$message.warning("聊天室key长度不合法!")
+                                }else{
+                                    this.$message.error("后台服务错误!")
+                                }
                                 console.log(err)
-                                //跳转回登录页面
-                                window.location.href="./index.html"
+                                //跳转回新建聊天室的页面
+                                //window.location.href="./newRoom.html"
                             })
                     },
                     checkEntryRoomKey(){
