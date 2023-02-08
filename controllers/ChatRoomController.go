@@ -70,8 +70,7 @@ func EntryChatRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	room_key := StringByte.Bytes2String(buf)
-	if len(room_key) < 10 {
+	if len(StringByte.Bytes2String(buf)) < 10 {
 		w.WriteHeader(http.StatusForbidden)
 		fmt.Fprintf(w, "invalid key")
 		return
